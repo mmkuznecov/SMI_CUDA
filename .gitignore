@@ -52,3 +52,6 @@ ENV/
 
 # Debug logs
 *.log
+
+# Dirs
+reports/

@@ -132,22 +132,45 @@ __global__ void compute_mi_kernel(
             2.7385383806f    // digamma(16)
         };
         
-        // Approximate digamma for values not in the table
-        auto digamma_approx = [&digamma_values](int x) -> float {
+        // Improved digamma function based on provided code
+        auto digamma_improved = [&digamma_values](int x) -> float {
+            // For non-positive inputs - should not happen in this algorithm
             if (x <= 0) {
                 return 0.0f;  // Error case, shouldn't happen
-            } else if (x <= 16) {
+            } 
+            // Use precomputed values for small integers for optimization
+            else if (x <= 16) {
                 return digamma_values[x - 1];
-            } else {
-                // Asymptotic approximation for large x
-                return logf(x) - 0.5f/x;
+            } 
+            // For larger values, use the improved Stirling's expansion
+            else {
+                const float c = 8.5f;
+                const float s3 = 0.08333333333f;
+                const float s4 = 0.0083333333333f;
+                const float s5 = 0.003968253968f;
+                float value = 0.0f;
+                float y = static_cast<float>(x);
+                
+                // Reduce to digamma(y + n) where (y + n) >= c
+                while (y < c) {
+                    value = value - 1.0f / y;
+                    y = y + 1.0f;
+                }
+                
+                // Use Stirling's (actually de Moivre's) expansion
+                float r = 1.0f / y;
+                value = value + logf(y) - 0.5f * r;
+                r = r * r;
+                value = value - r * (s3 - r * (s4 - r * s5));
+                
+                return value;
             }
         };
         
-        float digamma_cx = digamma_approx(counts_x[i]);
-        float digamma_cy = digamma_approx(counts_y[i]);
-        float digamma_k_val = digamma_approx(k);
-        float digamma_n_val = digamma_approx(n_samples);
+        float digamma_cx = digamma_improved(counts_x[i]);
+        float digamma_cy = digamma_improved(counts_y[i]);
+        float digamma_k_val = digamma_improved(k);
+        float digamma_n_val = digamma_improved(n_samples);
         
         mi_samples[i] = digamma_k_val + digamma_n_val - digamma_cx - digamma_cy;
     }
