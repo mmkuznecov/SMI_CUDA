@@ -20,6 +20,9 @@ class MutualInformationEstimator:
         if not isinstance(x, torch.Tensor) or not isinstance(y, torch.Tensor):
             raise TypeError("Inputs must be PyTorch tensors")
 
+        if x.dim() == 0 or y.dim() == 0:
+            raise ValueError("Inputs must have at least one dimension (the sample axis)")
+
         if y.shape[0] != x.shape[0]:
             raise ValueError("The number of samples in `x` and `y` must be equal")
 

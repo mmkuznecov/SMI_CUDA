@@ -4,9 +4,11 @@ import time
 
 # === CPU baseline estimators ===
 from original_mutinfo.mutinfo.knn import KSG as KSG_CPU
+from original_mutinfo.mutinfo.smi import SMI as SMI_CPU
 
 # === CUDA estimators ===
 from smi_torch.knn import KSG as KSG_CUDA
+from smi_torch.smi import SMI as SMI_CUDA
 
 def generate_correlated_gaussians(n_samples=1000, dim=5, noise=0.1):
     x = np.random.randn(n_samples, dim)
@@ -15,7 +17,7 @@ def generate_correlated_gaussians(n_samples=1000, dim=5, noise=0.1):
 
 def test_estimator(cpu_estimator, cuda_estimator, x_np, y_np, name):
     print(f"\n=== Testing {name} ===")
-    
+
     # --- CPU ---
     t0 = time.time()
     mi_cpu = cpu_estimator(x_np, y_np)
@@ -25,8 +27,11 @@ def test_estimator(cpu_estimator, cuda_estimator, x_np, y_np, name):
     # --- CUDA ---
     x_torch = torch.tensor(x_np, device='cuda')
     y_torch = torch.tensor(y_np, device='cuda')
+    cuda_estimator(x_torch[:100], y_torch[:100])  # warm-up
+    torch.cuda.synchronize()
     t0 = time.time()
     mi_cuda = cuda_estimator(x_torch, y_torch)
+    torch.cuda.synchronize()
     t1 = time.time()
     print(f"[CUDA] MI: {mi_cuda:.4f} (time: {t1 - t0:.3f}s)")
 
@@ -45,6 +50,13 @@ def main():
     ksg_cpu = KSG_CPU(k_neighbors=5)
     ksg_cuda = KSG_CUDA(k_neighbors=5)
     test_estimator(ksg_cpu, ksg_cuda, x_np, y_np, "KSG Estimator")
+
+    # SMI (random projections differ between CPU and CUDA, so estimates agree
+    # only up to the Monte Carlo error)
+    x_np, y_np = generate_correlated_gaussians(n_samples=5000, dim=100, noise=1.0)
+    smi_cpu = SMI_CPU(KSG_CPU(k_neighbors=5), n_projection_samples=128)
+    smi_cuda = SMI_CUDA(KSG_CUDA(k_neighbors=5), n_projection_samples=128)
+    test_estimator(smi_cpu, smi_cuda, x_np, y_np, "SMI Estimator")
 
 if __name__ == "__main__":
     main()
